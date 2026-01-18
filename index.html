@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Budget Pro - V9.9.5</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { 
+            --primary: #2c3e50; --success: #27ae60; --danger: #e74c3c; --accent: #3498db; --bg: #f4f7f6; 
+            --saving: #16a085; --transfer: #9b59b6; --fixe: #f39c12; --plan: #e67e22; --card: #ffffff; --text: #2c3e50;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root { --bg: #1a1a1a; --card: #2d2d2d; --text: #ecf0f1; --primary: #34495e; }
+            input, select { background: #3d3d3d; color: white; border-color: #555; }
+            .nav-bar { background: #2d2d2d; border-top: 1px solid #444; }
+            .history { background: #00000030 !important; }
+        }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; padding-bottom: 80px; color: var(--text); transition: 0.3s; }
+        .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; justify-content: space-around; padding: 10px; box-shadow: 0 -2px 15px rgba(0,0,0,0.1); z-index: 1000; }
+        .nav-item { border: none; background: none; color: #95a5a6; font-size: 0.65em; display: flex; flex-direction: column; align-items: center; cursor: pointer; flex:1; }
+        .nav-item.active { color: var(--accent); font-weight: bold; }
+        .container { max-width: 600px; margin: auto; padding: 20px; }
+        .page { display: none; animation: fadeIn 0.2s; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .section { margin-bottom: 20px; padding: 18px; border-radius: 15px; background: var(--card); box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        h3 { margin-top: 0; font-size: 1.1em; border-bottom: 1px solid #f0f0f044; padding-bottom: 8px; margin-bottom: 15px; }
+        .stat-card { padding: 12px; border-radius: 12px; text-align: center; color: white; background: var(--primary); margin-bottom: 20px; }
+        .amount { font-size: 1.3em; font-weight: bold; display: block; }
+        .progress-bar { height: 12px; background: #00000010; border-radius: 6px; overflow: hidden; margin: 8px 0; display: flex; }
+        .progress-fill { height: 100%; transition: width 0.5s ease; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 10px; }
+        input, select { padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.9em; width: 100%; box-sizing: border-box; }
+        button { padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-add { background: var(--success); }
+        .btn-assign { background: var(--accent); }
+        .btn-spend { background: var(--danger); }
+        .btn-fixe { background: var(--fixe); }
+        .btn-plan { background: var(--plan); }
+        .btn-transfer { background: var(--transfer); }
+        .history { font-size: 0.8em; max-height: 250px; overflow-y: auto; background: #00000008; padding: 10px; border-radius: 8px; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 6px 0; }
+        .reserve-tag { font-size: 0.75em; color: var(--fixe); font-weight: bold; }
+        .available-tag { font-size: 0.75em; color: var(--success); font-weight: bold; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .btn-del-mini { background: none; color: #ccc; border: none; cursor: pointer; padding: 2px 5px; font-size: 1em; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="page-view" class="page active">
+            <h2 style="text-align:center">Mes enveloppes 📁</h2>
+            <div id="categories-list"></div>
+            <div class="section">
+                <h3>📊 Répartition réelle (Fixe + Variable)</h3>
+                <div style="max-width: 220px; margin: auto;"><canvas id="expenseChart"></canvas></div>
+            </div>
+        </div>
+
+        <div id="page-manage" class="page">
+            <h2 style="text-align:center">Gestion ⚙️</h2>
+            <div class="stat-card"><span class="amount" id="main-balance" style="color:#2ecc71">0.00 €</span>À assigner</div>
+
+            <div class="section">
+                <h3>🤑 Entrées d'argent</h3>
+                <div class="input-row">
+                    <input type="text" id="inc-name" placeholder="Source">
+                    <input type="number" id="inc-amount" placeholder="Montant €">
+                    <button class="btn-add" onclick="ajouterRevenu()">Ajouter</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>🎯 Alimenter, dépenser, économiser</h3>
+                <div class="grid-2">
+                    <input type="text" id="target-name" placeholder="Enveloppe/Projet" list="standard-suggestions">
+                    <datalist id="standard-suggestions">
+                        <option value="🛒 Courses / Alimentation"><option value="🍕 Sorties"><option value="📺 Loisirs">
+                        <option value="🛍️ Shopping"><option value="🚗 Transport / Voiture"><option value="💊 Santé / Sport">
+                        <option value="📱 Communication"><option value="🏠 Maison"><option value="✈️ Voyage"><option value="🎁 Cadeaux">
+                        <option value="🧸 Enfants / Éducation"><option value="🐱 Animaux"><option value="🛠️ Réparations urgentes">
+                        <option value="🧾 Imprévus"><option value="🌀 Autres">
+                    </datalist>
+                    <input type="number" id="target-amount" placeholder="Montant €">
+                </div>
+                <div style="display:flex; gap:8px; margin-bottom:15px;">
+                    <button class="btn-assign" onclick="gererFlux('depense')" style="flex:1">Enveloppe</button>
+                    <button style="background:var(--saving); flex:1" onclick="gererFlux('epargne')">Projet</button>
+                </div>
+                <hr>
+                <div class="grid-2">
+                    <select id="select-cat"></select>
+                    <input type="date" id="spend-date">
+                </div>
+                <div class="input-row">
+                    <input type="text" id="spend-desc" placeholder="Dépense">
+                    <input type="number" id="spend-amount" placeholder="€">
+                    <button class="btn-spend" onclick="depenserArgent()">Payer</button>
+                </div>
+                <hr>
+                <h3 style="font-size: 0.9em; color: var(--transfer); margin-top: 15px;">🔄 Virement interne</h3>
+                <div class="grid-2">
+                    <select id="trans-from"></select>
+                    <select id="trans-to"></select>
+                </div>
+                <div class="input-row">
+                    <div style="grid-column: span 2"><input type="number" id="trans-amount" placeholder="Montant à transférer €"></div>
+                    <button class="btn-transfer" onclick="transférerArgent()">OK</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>📌 Charges Fixes</h3>
+                <div id="fixe-list" style="margin-bottom: 15px;"></div>
+                <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 8px; margin-bottom: 8px;">
+                    <input type="text" id="fixe-name" placeholder="Nom (Loyer...)">
+                    <select id="fixe-cat-select"></select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px;">
+                    <input type="number" id="fixe-day" placeholder="Jour (1-31)">
+                    <input type="number" id="fixe-amount" placeholder="Montant €">
+                    <button class="btn-fixe" onclick="ajouterChargeFixe()">+</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>📜 Journal des transactions</h3>
+                <div id="history-list" class="history"></div>
+            </div>
+
+            <div class="section" style="border: 2px solid var(--primary); margin-top: 40px;">
+                <h3>📆 Clôture mensuelle</h3>
+                <div style="background: #0000000a; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: center; font-size: 0.9em;">
+                    Dépenses ce mois : <strong id="total-spent-month">0.00 €</strong>
+                </div>
+                <button style="background:var(--primary); width:100%" onclick="nouveauMois()">📅 Démarrer un nouveau mois</button>
+            </div>
+        </div>
+
+        <div id="page-plan" class="page">
+            <h2 style="text-align:center">Planification 📅</h2>
+            <div class="section">
+                <h3>📝 Dépenses prévues</h3>
+                <div class="grid-2"><select id="plan-cat"></select><input type="date" id="plan-date"></div>
+                <div class="input-row"><input type="text" id="plan-desc" placeholder="Dépense"><input type="number" id="plan-amount" placeholder="€"><button class="btn-plan" onclick="ajouterPlanification()">Prévoir</button></div>
+            </div>
+            <div class="section"><h3>⏳ File d'attente</h3><div id="plan-list"></div></div>
+        </div>
+
+        <div id="page-future" class="page">
+            <h2 style="text-align:center">Coffre-fort 🔐</h2>
+            <div class="stat-card" style="background:var(--saving)"><span class="amount" id="saving-balance">0.00 €</span>Total Économies</div>
+            <div class="section">
+                <h3>🆕 Nouveau Projet</h3>
+                <div class="input-row"><input type="text" id="proj-name" placeholder="Nom du projet"><input type="number" id="proj-goal" placeholder="Objectif €"><button class="btn-add" onclick="creerProjet()">Créer</button></div>
+            </div>
+            <div id="savings-list"></div>
+            <div class="section">
+                <h3>💾 Sauvegarde & Données</h3>
+                <div class="grid-2">
+                    <button class="btn-assign" onclick="exporterDonnees()">📤 Exporter</button>
+                    <button class="btn-fixe" onclick="document.getElementById('importFile').click()">📥 Importer</button>
+                </div>
+                <input type="file" id="importFile" style="display:none" onchange="importerDonnees(event)">
+                <button style="background:var(--danger); width:100%; margin-top:15px; font-size: 0.8em;" onclick="reinitialiserTout()">⚠️ Réinitialiser toutes les données</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="nav-bar">
+        <button class="nav-item active" onclick="showPage('page-view', this)">📁<br>Enveloppes</button>
+        <button class="nav-item" onclick="showPage('page-manage', this)">⚙️<br>Gestion</button>
+        <button class="nav-item" onclick="showPage('page-plan', this)">📅<br>Planification</button>
+        <button class="nav-item" onclick="showPage('page-future', this)">🔐<br>Coffre-fort</button>
+    </nav>
+
+<script>
+    let data = JSON.parse(localStorage.getItem('ynabV9_9_5')) || { 
+        solde: 0, soldeEpargne: 0, categories: {}, chargesFixes: [], historique: [], projetsEpargne: {}, planification: [] 
+    };
+    let myChart;
+    const palette = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
+
+    function save() { localStorage.setItem('ynabV9_9_5', JSON.stringify(data)); render(); updateChart(); updateSpentSummary(); }
+
+    function showPage(pId, btn) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(pId).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if(pId === 'page-view') updateChart();
+    }
+
+    function render() {
+        document.getElementById('main-balance').innerText = data.solde.toFixed(2) + " €";
+        document.getElementById('saving-balance').innerText = (data.soldeEpargne || 0).toFixed(2) + " €";
+        const catList = document.getElementById('categories-list'), selCat = document.getElementById('select-cat'),
+              fixeCatSel = document.getElementById('fixe-cat-select'), fixeList = document.getElementById('fixe-list'),
+              planCat = document.getElementById('plan-cat'), planList = document.getElementById('plan-list'),
+              saveList = document.getElementById('savings-list'),
+              transFrom = document.getElementById('trans-from'), transTo = document.getElementById('trans-to');
+
+        catList.innerHTML = fixeList.innerHTML = planList.innerHTML = saveList.innerHTML = "";
+        selCat.innerHTML = fixeCatSel.innerHTML = planCat.innerHTML = transFrom.innerHTML = transTo.innerHTML = '<option value="">Choisir Enveloppe...</option>';
+
+        const calculFixes = {};
+        data.chargesFixes.forEach(f => { calculFixes[f.cat] = (calculFixes[f.cat] || 0) + f.amount; });
+
+        Object.keys(data.categories).forEach((n, i) => {
+            const c = data.categories[n];
+            const fixeReserve = calculFixes[n] || 0;
+            const dispoReel = c.reste - fixeReserve;
+            catList.innerHTML += `<div class="section"><div style="display:flex; justify-content:space-between; font-weight:bold; font-size:0.9em; margin-bottom:5px;"><span>${n}</span><span>${c.reste.toFixed(2)}€</span></div><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span class="available-tag">Libre: ${dispoReel.toFixed(2)}€</span><span class="reserve-tag">Fixe: ${fixeReserve.toFixed(2)}€</span></div><div class="progress-bar"><div class="progress-fill" style="width:${c.assigne>0?Math.min(100,(dispoReel/c.assigne)*100):0}%; background:${palette[i%palette.length]}"></div><div class="progress-fill" style="width:${c.assigne>0?Math.min(100,(fixeReserve/c.assigne)*100):0}%; background:#bdc3c7; opacity:0.5"></div></div><button style="background:none; border:none; color:#ccc; font-size:0.7em; padding:0" onclick="supprCat('${n}')">🗑️ Supprimer</button></div>`;
+            selCat.innerHTML += `<option value="${n}">${n}</option>`;
+            fixeCatSel.innerHTML += `<option value="${n}">${n}</option>`;
+            planCat.innerHTML += `<option value="${n}">${n}</option>`;
+            transFrom.innerHTML += `<option value="${n}">${n}</option>`;
+            transTo.innerHTML += `<option value="${n}">${n}</option>`;
+        });
+
+        [...data.chargesFixes].sort((a,b) => a.day - b.day).forEach((f) => {
+            fixeList.innerHTML += `<div style="display:flex; justify-content:space-between; font-size:0.85em; padding:4px 0; border-bottom:1px solid #eee;"><span>Le ${f.day} : ${f.name} → <b>${f.cat}</b></span><span>${f.amount.toFixed(2)}€ <button style="color:red; border:none; background:none;" onclick="data.chargesFixes.splice(${data.chargesFixes.indexOf(f)},1);save()">✕</button></span></div>`;
+        });
+
+        data.planification.forEach((p, idx) => {
+            planList.innerHTML += `<div style="display:flex; justify-content:space-between; background:#00000005; padding:8px; margin-bottom:5px; border-radius:8px; font-size:0.85em;"><span>${new Date(p.date).toLocaleDateString()} - <b>${p.desc}</b> (${p.amt}€)</span><button style="background:none; border:none; color:#ccc" onclick="data.planification.splice(${idx},1);save()">🗑️</button></div>`;
+        });
+
+        Object.keys(data.projetsEpargne || {}).forEach(n => {
+            const p = data.projetsEpargne[n];
+            const pc = p.goal > 0 ? Math.min(100, (p.cumul/p.goal)*100) : 0;
+            saveList.innerHTML += `<div class="section"><div style="display:flex; justify-content:space-between; font-weight:bold; font-size:0.9em;"><span>🔐 ${n}</span><span>${p.cumul.toFixed(2)}€ / ${p.goal}€</span></div><div class="progress-bar"><div class="progress-fill" style="width:${pc}%; background:var(--saving)"></div></div><div style="display:flex; gap:5px; margin-top:10px;"><button class="btn-fixe btn-small" style="font-size:0.7em; padding:5px" onclick="retirerDuCoffre('${n}')">Retirer un montant</button><button style="background:none; border:none; color:#ccc; margin-left:auto" onclick="delete data.projetsEpargne['${n}']; save();">🗑️</button></div></div>`;
+        });
+
+        const histHtml = data.historique.slice().reverse().map((h, originalIdx) => {
+            const idx = data.historique.length - 1 - originalIdx;
+            return `<div class="history-item">
+                <div style="flex:1">
+                    <span style="display:block; font-weight:bold; color:${h.color}">${h.amt.toFixed(2)}€</span>
+                    <span style="font-size:0.8em; color:#7f8c8d">${h.date} - ${h.txt}</span>
+                </div>
+                <button class="btn-del-mini" onclick="annulerTransaction(${idx})">✕</button>
+            </div>`;
+        }).join('');
+        document.getElementById('history-list').innerHTML = histHtml;
+    }
+
+    function ajouterRevenu() {
+        const n = document.getElementById('inc-name'), a = document.getElementById('inc-amount'), v = parseFloat(a.value);
+        if(v > 0) {
+            let totalFixesGeneral = 0;
+            data.historique.push({date:getShortDate(new Date()), txt:`Entrée: ${n.value||'Revenu'}`, amt:v, color:'var(--success)', type:'revenu'});
+            data.chargesFixes.forEach(f => {
+                if(!data.categories[f.cat]) data.categories[f.cat] = {assigne: 0, reste: 0};
+                data.categories[f.cat].reste += f.amount;
+                data.categories[f.cat].assigne += f.amount;
+                totalFixesGeneral += f.amount;
+                data.historique.push({date:getShortDate(new Date()), txt:`Charge fixe : ${f.name} (${f.cat})`, amt:-f.amount, color:'var(--fixe)', type:'fixe', cat:f.cat});
+            });
+            data.solde += (v - totalFixesGeneral);
+            n.value=""; a.value=""; save();
+        }
+    }
+
+    function gererFlux(type) {
+        const nI = document.getElementById('target-name'), aI = document.getElementById('target-amount'), n = nI.value.trim(), v = parseFloat(aI.value);
+        if(n && v > 0 && v <= data.solde) {
+            if(type==='depense') {
+                if(!data.categories[n]) data.categories[n]={assigne:0, reste:0};
+                data.categories[n].assigne += v; data.categories[n].reste += v;
+                data.historique.push({date:getShortDate(new Date()), txt:`Vers Enveloppe : ${n}`, amt:-v, color:'var(--accent)', type:'assignation', cat:n});
+            } else {
+                if(!data.projetsEpargne[n]) data.projetsEpargne[n]={cumul:0, goal:0};
+                data.projetsEpargne[n].cumul += v; data.soldeEpargne = (data.soldeEpargne||0) + v;
+                data.historique.push({date:getShortDate(new Date()), txt:`Vers Coffre : ${n}`, amt:-v, color:'#3498db', type:'coffre', proj:n});
+            }
+            data.solde -= v; nI.value=""; aI.value=""; save();
+        }
+    }
+
+    function depenserArgent() {
+        const c = document.getElementById('select-cat').value, dI = document.getElementById('spend-desc'), aI = document.getElementById('spend-amount'), dt = document.getElementById('spend-date').value;
+        const a = parseFloat(aI.value);
+        if(c && a > 0) {
+            data.categories[c].reste -= a;
+            data.historique.push({date:getShortDate(new Date(dt)), txt:`Dépense [${c}] ${dI.value}`, amt:-a, color:'var(--danger)', isSpent:true, type:'depense', cat:c});
+            dI.value = ""; aI.value = ""; save();
+        }
+    }
+
+    function transférerArgent() {
+        const from = document.getElementById('trans-from').value, to = document.getElementById('trans-to').value, amt = parseFloat(document.getElementById('trans-amount').value);
+        if(from && to && from !== to && amt > 0 && data.categories[from].reste >= amt) {
+            data.categories[from].reste -= amt; data.categories[from].assigne -= amt;
+            data.categories[to].reste += amt; data.categories[to].assigne += amt;
+            data.historique.push({date:getShortDate(new Date()), txt:`Transfert: ${from} ➔ ${to}`, amt:amt, color:'var(--transfer)', type:'transfert', from:from, to:to});
+            document.getElementById('trans-amount').value = ""; save();
+        }
+    }
+
+    function annulerTransaction(idx) {
+        if(!confirm("Annuler cette transaction et rétablir les soldes ?")) return;
+        const h = data.historique[idx];
+        const amt = Math.abs(h.amt);
+        if(h.type === 'revenu') data.solde -= amt;
+        else if(h.type === 'fixe' || h.type === 'assignation') { 
+            if(data.categories[h.cat]) { data.categories[h.cat].reste -= amt; data.categories[h.cat].assigne -= amt; }
+            data.solde += amt;
+        }
+        else if(h.type === 'depense') { if(data.categories[h.cat]) data.categories[h.cat].reste += amt; }
+        else if(h.type === 'coffre') { 
+            if(data.projetsEpargne[h.proj]) data.projetsEpargne[h.proj].cumul -= amt;
+            data.soldeEpargne -= amt; data.solde += amt;
+        }
+        else if(h.type === 'retrait_coffre') {
+            if(data.projetsEpargne[h.proj]) data.projetsEpargne[h.proj].cumul += amt;
+            data.soldeEpargne += amt; data.solde -= amt;
+        }
+        else if(h.type === 'transfert') {
+            data.categories[h.from].reste += amt; data.categories[h.from].assigne += amt;
+            data.categories[h.to].reste -= amt; data.categories[h.to].assigne -= amt;
+        }
+        data.historique.splice(idx, 1); save();
+    }
+
+    function ajouterChargeFixe() {
+        const n = document.getElementById('fixe-name').value, c = document.getElementById('fixe-cat-select').value, d = parseInt(document.getElementById('fixe-day').value), a = parseFloat(document.getElementById('fixe-amount').value);
+        if(n && c && d && a > 0) { 
+            data.chargesFixes.push({name:n, cat:c, day:d, amount:a}); 
+            document.getElementById('fixe-name').value = ""; document.getElementById('fixe-day').value = ""; document.getElementById('fixe-amount').value = "";
+            save(); 
+        }
+    }
+
+    function ajouterPlanification() {
+        const c = document.getElementById('plan-cat').value, dI = document.getElementById('plan-desc'), aI = document.getElementById('plan-amount'), dt = document.getElementById('plan-date').value;
+        if(c && !isNaN(parseFloat(aI.value))) { data.planification.push({cat:c, desc:dI.value, amt:parseFloat(aI.value), date:dt}); save(); }
+    }
+
+    function creerProjet() {
+        const n = document.getElementById('proj-name').value, g = parseFloat(document.getElementById('proj-goal').value);
+        if(n && !isNaN(g)) { data.projetsEpargne[n] = {cumul:0, goal:g}; save(); }
+    }
+
+    function retirerDuCoffre(n) {
+        const amt = parseFloat(prompt(`Montant à retirer de "${n}" (Max: ${data.projetsEpargne[n].cumul.toFixed(2)} €) ?`));
+        if(!isNaN(amt) && amt > 0 && amt <= data.projetsEpargne[n].cumul) {
+            data.projetsEpargne[n].cumul -= amt; data.soldeEpargne -= amt; data.solde += amt;
+            data.historique.push({date:getShortDate(new Date()), txt:`Sortie Coffre : ${n}`, amt:amt, color:'#3498db', type:'retrait_coffre', proj:n});
+            save();
+        }
+    }
+
+    function nouveauMois() {
+        if(confirm("Démarrer un nouveau mois ? (Les soldes d'enveloppes seront remis à zéro)")) {
+            let rec = 0; Object.keys(data.categories).forEach(n => { rec += Math.max(0, data.categories[n].reste); data.categories[n].reste = 0; data.categories[n].assigne = 0; });
+            data.solde += rec; data.historique = []; save();
+        }
+    }
+
+    function updateSpentSummary() {
+        const tot = data.historique.filter(h => h.isSpent || h.type === 'fixe').reduce((s, h) => s + Math.abs(h.amt), 0);
+        document.getElementById('total-spent-month').innerText = tot.toFixed(2) + " €";
+    }
+
+    function exporterDonnees() {
+        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `budget_backup.json`; a.click();
+    }
+
+    function importerDonnees(event) {
+        const reader = new FileReader(); reader.onload = (e) => { data = JSON.parse(e.target.result); save(); location.reload(); }; reader.readAsText(event.target.files[0]);
+    }
+
+    function reinitialiserTout() {
+        if(confirm("🛑 ATTENTION : Cela va supprimer toutes vos données. Continuer ?")) {
+            localStorage.removeItem('ynabV9_9_5');
+            location.reload();
+        }
+    }
+
+    function getShortDate(d) { return d.toLocaleDateString('fr-FR', {day:'numeric', month:'short'}); }
+    function supprCat(n) { if(confirm("Supprimer l'enveloppe ?")) { delete data.categories[n]; save(); } }
+    
+    function updateChart() {
+        const canvas = document.getElementById('expenseChart'); if (!canvas) return;
+        const totals = {}; Object.keys(data.categories).forEach(n => { totals[n] = data.categories[n].assigne; });
+        if(myChart) myChart.destroy();
+        if(Object.keys(totals).length === 0) return;
+        myChart = new Chart(canvas.getContext('2d'), { type: 'doughnut', data: { labels: Object.keys(totals), datasets: [{ data: Object.values(totals), backgroundColor: palette }] }, options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } } } });
+    }
+
+    document.getElementById('spend-date').value = new Date().toISOString().split('T')[0];
+    render();
+</script>
+</body>
+</html>
