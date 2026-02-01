@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mon Budget Pro - V9.9.9.2</title>
+    <title>Mon Budget Pro - V9.9.9.3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
@@ -17,11 +17,10 @@
         }
         body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; padding-bottom: 100px; color: var(--text); }
         
-        /* Menu avec émojis uniquement */
         .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; justify-content: space-around; padding: 20px 5px; box-shadow: 0 -2px 15px rgba(0,0,0,0.1); z-index: 1000; }
         .nav-item { border: none; background: none; color: #95a5a6; display: flex; align-items: center; justify-content: center; cursor: pointer; flex:1; }
         .nav-item.active { background: #00000005; border-radius: 15px; }
-        .nav-icon { font-size: 2em; } /* Taille augmentée pour les émojis */
+        .nav-icon { font-size: 2em; }
 
         .container { max-width: 600px; margin: auto; padding: 20px; }
         .page { display: none; animation: fadeIn 0.2s; }
@@ -44,6 +43,10 @@
         .input-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 10px; }
         .history { font-size: 0.85em; max-height: 250px; overflow-y: auto; background: #00000008; padding: 10px; border-radius: 8px; }
         .history-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 8px 0; }
+        
+        /* Boutons d'action pour les projets */
+        .proj-actions { display: flex; gap: 10px; margin-top: 10px; }
+        .btn-small { padding: 8px; font-size: 0.9em; flex: 1; }
     </style>
 </head>
 <body>
@@ -215,7 +218,15 @@
 
         Object.keys(data.projetsEpargne || {}).forEach(n => {
             const p = data.projetsEpargne[n];
-            saveList.innerHTML += `<div class="section"><div style="display:flex; justify-content:space-between; font-weight:bold;"><span>🔐 ${n}</span><span>${p.cumul.toFixed(2)}€ / ${p.goal}€</span></div><div class="progress-bar"><div class="progress-fill" style="width:${p.goal>0?Math.min(100,(p.cumul/p.goal)*100):0}%; background:var(--saving)"></div></div><button style="background:none; color:var(--danger); font-size:0.8em; border:none; padding:0;" onclick="retirerDuProjet('${n}')">Retirer l'argent</button></div>`;
+            saveList.innerHTML += `<div class="section">
+                <div style="display:flex; justify-content:space-between; font-weight:bold;"><span>🔐 ${n}</span><span>${p.cumul.toFixed(2)}€ / ${p.goal}€</span></div>
+                <div class="progress-bar"><div class="progress-fill" style="width:${p.goal>0?Math.min(100,(p.cumul/p.goal)*100):0}%; background:var(--saving)"></div></div>
+                <div class="proj-actions">
+                    <button class="btn-small" style="background:var(--accent)" onclick="modifierProjet('${n}')">✏️ Modif.</button>
+                    <button class="btn-small" style="background:var(--danger)" onclick="supprimerProjet('${n}')">🗑️ Suppr.</button>
+                    <button class="btn-small" style="background:var(--transfer)" onclick="retirerDuProjet('${n}')">💸 Sortir</button>
+                </div>
+            </div>`;
             selProj.innerHTML += `<option value="${n}">${n}</option>`;
         });
 
@@ -275,15 +286,36 @@
     }
 
     function retirerDuProjet(n) {
-        const amt = parseFloat(prompt(`Montant à retirer de "${n}" ?`));
+        const amt = parseFloat(prompt(`Montant à sortir de "${n}" pour le remettre dans "À placer" ?`));
         if(!isNaN(amt) && amt > 0 && amt <= data.projetsEpargne[n].cumul) { data.projetsEpargne[n].cumul -= amt; data.soldeEpargne -= amt; data.aPlacer += amt; save(); }
+    }
+
+    function modifierProjet(oldName) {
+        const newName = prompt("Nouveau nom du projet ?", oldName);
+        const newGoal = parseFloat(prompt("Nouvel objectif (€) ?", data.projetsEpargne[oldName].goal));
+        if(newName && !isNaN(newGoal)) {
+            const projectData = data.projetsEpargne[oldName];
+            delete data.projetsEpargne[oldName];
+            data.projetsEpargne[newName] = projectData;
+            data.projetsEpargne[newName].goal = newGoal;
+            save();
+        }
+    }
+
+    function supprimerProjet(n) {
+        if(confirm(`Supprimer le projet "${n}" ? L'argent accumulé (${data.projetsEpargne[n].cumul.toFixed(2)}€) sera reversé dans "À placer".`)) {
+            data.aPlacer += data.projetsEpargne[n].cumul;
+            data.soldeEpargne -= data.projetsEpargne[n].cumul;
+            delete data.projetsEpargne[n];
+            save();
+        }
     }
 
     function creerProjet() {
         const nI = document.getElementById('proj-name'), gI = document.getElementById('proj-goal'), n = nI.value, g = parseFloat(gI.value);
         if(n && !isNaN(g)) { 
             data.projetsEpargne[n] = {cumul:0, goal:g}; 
-            nI.value = ""; gI.value = ""; // Vider les champs
+            nI.value = ""; gI.value = ""; 
             save(); 
         }
     }
