@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mon Budget Pro - V9.9.9.3</title>
+    <title>Mon Budget Pro - V9.9.9.4</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
@@ -28,7 +28,7 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .section { margin-bottom: 20px; padding: 18px; border-radius: 15px; background: var(--card); box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
         h3 { margin-top: 0; font-size: 1.1em; border-bottom: 1px solid #f0f0f044; padding-bottom: 8px; margin-bottom: 15px; }
-        .stat-card { padding: 12px; border-radius: 12px; text-align: center; color: white; background: var(--primary); margin-bottom: 20px; }
+        .stat-card { padding: 12px; border-radius: 12px; text-align: center; color: white; background: var(--primary); margin-bottom: 10px; }
         .amount { font-size: 1.4em; font-weight: bold; display: block; }
         .progress-bar { height: 12px; background: #00000010; border-radius: 6px; overflow: hidden; margin: 8px 0; display: flex; }
         .progress-fill { height: 100%; transition: width 0.5s ease; }
@@ -44,9 +44,8 @@
         .history { font-size: 0.85em; max-height: 250px; overflow-y: auto; background: #00000008; padding: 10px; border-radius: 8px; }
         .history-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 8px 0; }
         
-        /* Boutons d'action pour les projets */
-        .proj-actions { display: flex; gap: 10px; margin-top: 10px; }
-        .btn-small { padding: 8px; font-size: 0.9em; flex: 1; }
+        .proj-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-small { padding: 8px; font-size: 0.85em; flex: 1; border-radius: 6px; }
     </style>
 </head>
 <body>
@@ -142,8 +141,13 @@
         <div id="page-future" class="page">
             <h2 style="text-align:center">Coffre-fort</h2>
             <div class="grid-2">
-                <div class="stat-card" style="background:var(--saving);"><span class="amount" id="saving-balance">0.00 €</span>Économies</div>
-                <div class="stat-card" style="background:var(--accent);"><span class="amount" id="to-place-balance">0.00 €</span>À placer</div>
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <div class="stat-card" style="background:var(--saving);"><span class="amount" id="saving-balance">0.00 €</span>Économies</div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <div class="stat-card" style="background:var(--accent);"><span class="amount" id="to-place-balance">0.00 €</span>À placer</div>
+                    <button class="btn-small" style="background:var(--transfer); color:white; font-weight:bold; border:none; padding:8px;" onclick="libererVersBudget()">🔓 Libérer vers budget</button>
+                </div>
             </div>
             <div class="section">
                 <h3>📥 Répartir dans les projets</h3>
@@ -288,6 +292,16 @@
     function retirerDuProjet(n) {
         const amt = parseFloat(prompt(`Montant à sortir de "${n}" pour le remettre dans "À placer" ?`));
         if(!isNaN(amt) && amt > 0 && amt <= data.projetsEpargne[n].cumul) { data.projetsEpargne[n].cumul -= amt; data.soldeEpargne -= amt; data.aPlacer += amt; save(); }
+    }
+
+    function libererVersBudget() {
+        const amt = parseFloat(prompt(`Montant à renvoyer vers "À assigner" ? (Max: ${data.aPlacer.toFixed(2)}€)`));
+        if(!isNaN(amt) && amt > 0 && amt <= data.aPlacer) {
+            data.aPlacer -= amt;
+            data.solde += amt;
+            data.historique.push({date:getShortDate(new Date()), txt:`Retour du coffre`, amt:amt, color:'var(--success)', type:'revenu'});
+            save();
+        }
     }
 
     function modifierProjet(oldName) {
