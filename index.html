@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mon Budget Pro - V9.9.9.1</title>
+    <title>Mon Budget Pro - V9.9.9.2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
@@ -17,10 +17,11 @@
         }
         body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; padding-bottom: 100px; color: var(--text); }
         
-        .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; justify-content: space-around; padding: 15px 5px; box-shadow: 0 -2px 15px rgba(0,0,0,0.1); z-index: 1000; }
-        .nav-item { border: none; background: none; color: #95a5a6; font-size: 0.95em; display: flex; flex-direction: column; align-items: center; cursor: pointer; flex:1; font-weight: 600; }
-        .nav-item.active { color: var(--accent); }
-        .nav-icon { font-size: 1.5em; margin-bottom: 4px; }
+        /* Menu avec émojis uniquement */
+        .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; justify-content: space-around; padding: 20px 5px; box-shadow: 0 -2px 15px rgba(0,0,0,0.1); z-index: 1000; }
+        .nav-item { border: none; background: none; color: #95a5a6; display: flex; align-items: center; justify-content: center; cursor: pointer; flex:1; }
+        .nav-item.active { background: #00000005; border-radius: 15px; }
+        .nav-icon { font-size: 2em; } /* Taille augmentée pour les émojis */
 
         .container { max-width: 600px; margin: auto; padding: 20px; }
         .page { display: none; animation: fadeIn 0.2s; }
@@ -32,7 +33,7 @@
         .amount { font-size: 1.4em; font-weight: bold; display: block; }
         .progress-bar { height: 12px; background: #00000010; border-radius: 6px; overflow: hidden; margin: 8px 0; display: flex; }
         .progress-fill { height: 100%; transition: width 0.5s ease; }
-        input, select { padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1em; width: 100%; box-sizing: border-box; }
+        input, select { padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1.1em; width: 100%; box-sizing: border-box; }
         button { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; }
         .btn-add { background: var(--success); }
         .btn-assign { background: var(--accent); }
@@ -49,7 +50,7 @@
 
     <div class="container">
         <div id="page-view" class="page active">
-            <h2 style="text-align:center">Mes enveloppes 📁</h2>
+            <h2 style="text-align:center">Mes enveloppes</h2>
             <div id="categories-list"></div>
             <div class="section">
                 <h3>📊 Répartition réelle</h3>
@@ -58,7 +59,7 @@
         </div>
 
         <div id="page-manage" class="page">
-            <h2 style="text-align:center">Gestion ⚙️</h2>
+            <h2 style="text-align:center">Gestion</h2>
             <div class="stat-card"><span class="amount" id="main-balance" style="color:#2ecc71">0.00 €</span>À assigner</div>
 
             <div class="section">
@@ -126,7 +127,7 @@
         </div>
 
         <div id="page-plan" class="page">
-            <h2 style="text-align:center">Planification 📅</h2>
+            <h2 style="text-align:center">Planification</h2>
             <div class="section">
                 <h3>📝 Dépenses prévues</h3>
                 <div class="grid-2"><select id="plan-cat"></select><input type="date" id="plan-date-input"></div>
@@ -136,7 +137,7 @@
         </div>
 
         <div id="page-future" class="page">
-            <h2 style="text-align:center">Coffre-fort 🔐</h2>
+            <h2 style="text-align:center">Coffre-fort</h2>
             <div class="grid-2">
                 <div class="stat-card" style="background:var(--saving);"><span class="amount" id="saving-balance">0.00 €</span>Économies</div>
                 <div class="stat-card" style="background:var(--accent);"><span class="amount" id="to-place-balance">0.00 €</span>À placer</div>
@@ -149,16 +150,20 @@
             <div id="savings-list"></div>
             <div class="section">
                 <h3>🆕 Nouveau Projet</h3>
-                <div class="input-row"><input type="text" id="proj-name" placeholder="Nom du projet"><input type="number" id="proj-goal" placeholder="Objectif €"><button class="btn-add" onclick="creerProjet()">Créer</button></div>
+                <div class="input-row">
+                    <input type="text" id="proj-name" placeholder="Nom du projet">
+                    <input type="number" id="proj-goal" placeholder="Objectif €">
+                    <button class="btn-add" onclick="creerProjet()">Créer</button>
+                </div>
             </div>
         </div>
     </div>
 
     <nav class="nav-bar">
-        <button class="nav-item active" onclick="showPage('page-view', this)"><span class="nav-icon">📁</span>Enveloppes</button>
-        <button class="nav-item" onclick="showPage('page-manage', this)"><span class="nav-icon">⚙️</span>Gestion</button>
-        <button class="nav-item" onclick="showPage('page-plan', this)"><span class="nav-icon">📅</span>Planif.</button>
-        <button class="nav-item" onclick="showPage('page-future', this)"><span class="nav-icon">🔐</span>Coffre</button>
+        <button class="nav-item active" onclick="showPage('page-view', this)"><span class="nav-icon">📁</span></button>
+        <button class="nav-item" onclick="showPage('page-manage', this)"><span class="nav-icon">⚙️</span></button>
+        <button class="nav-item" onclick="showPage('page-plan', this)"><span class="nav-icon">📅</span></button>
+        <button class="nav-item" onclick="showPage('page-future', this)"><span class="nav-icon">🔐</span></button>
     </nav>
 
 <script>
@@ -191,8 +196,8 @@
               fixList = document.getElementById('fixe-list'), planDisplay = document.getElementById('plan-list');
 
         catList.innerHTML = saveList.innerHTML = fixList.innerHTML = planDisplay.innerHTML = "";
-        selCat.innerHTML = selPlan.innerHTML = selFix.innerHTML = '<option value="">Choisir Enveloppe...</option>';
-        selProj.innerHTML = '<option value="">Choisir Projet...</option>';
+        selCat.innerHTML = selPlan.innerHTML = selFix.innerHTML = '<option value="">Enveloppe...</option>';
+        selProj.innerHTML = '<option value="">Projet...</option>';
 
         Object.keys(data.categories).forEach((n, i) => {
             const c = data.categories[n];
@@ -275,8 +280,12 @@
     }
 
     function creerProjet() {
-        const n = document.getElementById('proj-name').value, g = parseFloat(document.getElementById('proj-goal').value);
-        if(n && !isNaN(g)) { data.projetsEpargne[n] = {cumul:0, goal:g}; save(); }
+        const nI = document.getElementById('proj-name'), gI = document.getElementById('proj-goal'), n = nI.value, g = parseFloat(gI.value);
+        if(n && !isNaN(g)) { 
+            data.projetsEpargne[n] = {cumul:0, goal:g}; 
+            nI.value = ""; gI.value = ""; // Vider les champs
+            save(); 
+        }
     }
 
     function annulerTransaction(idx) {
