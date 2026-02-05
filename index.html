@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mon Budget Pro - V9.9.9.4</title>
+    <title>Mon Budget Pro - V9.9.9.5</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
@@ -16,12 +16,10 @@
             .nav-bar { background: #2d2d2d; border-top: 1px solid #444; }
         }
         body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; padding-bottom: 100px; color: var(--text); }
-        
         .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; justify-content: space-around; padding: 20px 5px; box-shadow: 0 -2px 15px rgba(0,0,0,0.1); z-index: 1000; }
         .nav-item { border: none; background: none; color: #95a5a6; display: flex; align-items: center; justify-content: center; cursor: pointer; flex:1; }
         .nav-item.active { background: #00000005; border-radius: 15px; }
         .nav-icon { font-size: 2em; }
-
         .container { max-width: 600px; margin: auto; padding: 20px; }
         .page { display: none; animation: fadeIn 0.2s; }
         .page.active { display: block; }
@@ -43,7 +41,6 @@
         .input-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 10px; }
         .history { font-size: 0.85em; max-height: 250px; overflow-y: auto; background: #00000008; padding: 10px; border-radius: 8px; }
         .history-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 8px 0; }
-        
         .proj-actions { display: flex; gap: 8px; margin-top: 10px; }
         .btn-small { padding: 8px; font-size: 0.85em; flex: 1; border-radius: 6px; }
     </style>
@@ -55,7 +52,7 @@
             <h2 style="text-align:center">Mes enveloppes</h2>
             <div id="categories-list"></div>
             <div class="section">
-                <h3>📊 Répartition réelle</h3>
+                <h3>📊 Répartition réelle (Dépenses)</h3>
                 <div style="max-width: 220px; margin: auto;"><canvas id="expenseChart"></canvas></div>
             </div>
         </div>
@@ -101,7 +98,7 @@
             </div>
 
             <div class="section">
-                <h3>📌 Charges Fixes</h3>
+                <h3>📌 Charges Fixes (Prévues)</h3>
                 <div id="fixe-list" style="margin-bottom: 15px; font-size: 0.9em;"></div>
                 <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 8px; margin-bottom: 8px;">
                     <input type="text" id="fixe-name" placeholder="Nom (Loyer...)">
@@ -121,9 +118,6 @@
 
             <div class="section">
                 <h3>📆 Clôture mensuelle</h3>
-                <div style="background: #0000000a; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: center; font-size: 0.9em;">
-                    Dépenses ce mois : <strong id="total-spent-month">0.00 €</strong>
-                </div>
                 <button style="background:var(--primary); width:100%" onclick="nouveauMois()">📅 Démarrer un nouveau mois</button>
             </div>
         </div>
@@ -180,7 +174,12 @@
     let myChart;
     const palette = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
 
-    function save() { localStorage.setItem('ynabV9_9_9', JSON.stringify(data)); render(); updateChart(); }
+    function save() { 
+        data.chargesFixes.sort((a, b) => a.day - b.day); // Tri chronologique
+        localStorage.setItem('ynabV9_9_9', JSON.stringify(data)); 
+        render(); 
+        updateChart(); 
+    }
 
     function showPage(pId, btn) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -190,12 +189,10 @@
     }
 
     function render() {
+        const today = new Date().getDate();
         document.getElementById('main-balance').innerText = data.solde.toFixed(2) + " €";
         document.getElementById('saving-balance').innerText = (data.soldeEpargne || 0).toFixed(2) + " €";
         document.getElementById('to-place-balance').innerText = (data.aPlacer || 0).toFixed(2) + " €";
-        
-        let depensesTotales = data.historique.filter(h => h.type === 'depense').reduce((sum, h) => sum + Math.abs(h.amt), 0);
-        document.getElementById('total-spent-month').innerText = depensesTotales.toFixed(2) + " €";
 
         const catList = document.getElementById('categories-list'), selCat = document.getElementById('select-cat'),
               selPlan = document.getElementById('plan-cat'), selFix = document.getElementById('fixe-cat-select'),
@@ -206,18 +203,38 @@
         selCat.innerHTML = selPlan.innerHTML = selFix.innerHTML = '<option value="">Enveloppe...</option>';
         selProj.innerHTML = '<option value="">Projet...</option>';
 
+        // Calcul des enveloppes avec déduction des charges fixes
         Object.keys(data.categories).forEach((n, i) => {
             const c = data.categories[n];
-            catList.innerHTML += `<div class="section"><div style="display:flex; justify-content:space-between; font-weight:bold;"><span>${n}</span><span>${c.reste.toFixed(2)}€</span></div><div class="progress-bar"><div class="progress-fill" style="width:${c.assigne>0?Math.min(100,(c.reste/c.assigne)*100):0}%; background:${palette[i%palette.length]}"></div></div></div>`;
+            // Calculer le total des charges fixes pour cette catégorie ce mois-ci
+            const totalFixesCat = data.chargesFixes.filter(f => f.cat === n).reduce((sum, f) => sum + f.amount, 0);
+            // Le reste réel est ce qui est assigné - les charges fixes - les dépenses variables
+            const depensesVariables = data.historique.filter(h => h.type === 'depense' && h.cat === n).reduce((sum, h) => sum + Math.abs(h.amt), 0);
+            const resteReel = c.assigne - totalFixesCat - depensesVariables;
+
+            catList.innerHTML += `<div class="section">
+                <div style="display:flex; justify-content:space-between; font-weight:bold;">
+                    <span>${n}</span>
+                    <span style="color:${resteReel < 0 ? 'var(--danger)' : 'inherit'}">${resteReel.toFixed(2)}€</span>
+                </div>
+                <small>Assigné: ${c.assigne.toFixed(2)}€ | Prévu: ${totalFixesCat.toFixed(2)}€</small>
+                <div class="progress-bar"><div class="progress-fill" style="width:${c.assigne>0?Math.max(0, Math.min(100,(resteReel/c.assigne)*100)):0}%; background:${palette[i%palette.length]}"></div></div>
+            </div>`;
             [selCat, selPlan, selFix].forEach(s => s.innerHTML += `<option value="${n}">${n}</option>`);
         });
 
+        // Affichage Charges Fixes triées
         data.chargesFixes.forEach((f, i) => {
-            fixList.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span><b>J-${f.day}</b> ${f.name} (${f.cat})</span><span>${f.amount.toFixed(2)}€ <button onclick="supprimerFixe(${i})" style="background:none; color:var(--danger); padding:0;">✕</button></span></div>`;
+            const estPaye = f.day <= today;
+            fixList.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; opacity:${estPaye ? '0.5' : '1'}">
+                <span>${estPaye ? '✅' : '⏳'} <b>J-${f.day}</b> ${f.name}</span>
+                <span>${f.amount.toFixed(2)}€ <button onclick="supprimerFixe(${i})" style="background:none; color:var(--danger); padding:0; margin-left:10px;">✕</button></span>
+            </div>`;
         });
 
+        // Planification et Projets
         data.planification.forEach((p, i) => {
-            planDisplay.innerHTML += `<div class="history-item"><div><b>${p.date}</b> - ${p.desc} (${p.cat})</div><div>${p.amount.toFixed(2)}€ <button onclick="supprimerPlan(${i})" style="background:none; color:var(--danger);">✕</button></div></div>`;
+            planDisplay.innerHTML += `<div class="history-item"><div><b>${p.date}</b> - ${p.desc}</div><div>${p.amount.toFixed(2)}€ <button onclick="supprimerPlan(${i})" style="background:none; color:var(--danger);">✕</button></div></div>`;
         });
 
         Object.keys(data.projetsEpargne || {}).forEach(n => {
@@ -226,9 +243,9 @@
                 <div style="display:flex; justify-content:space-between; font-weight:bold;"><span>🔐 ${n}</span><span>${p.cumul.toFixed(2)}€ / ${p.goal}€</span></div>
                 <div class="progress-bar"><div class="progress-fill" style="width:${p.goal>0?Math.min(100,(p.cumul/p.goal)*100):0}%; background:var(--saving)"></div></div>
                 <div class="proj-actions">
-                    <button class="btn-small" style="background:var(--accent)" onclick="modifierProjet('${n}')">✏️ Modif.</button>
-                    <button class="btn-small" style="background:var(--danger)" onclick="supprimerProjet('${n}')">🗑️ Suppr.</button>
-                    <button class="btn-small" style="background:var(--transfer)" onclick="retirerDuProjet('${n}')">💸 Sortir</button>
+                    <button class="btn-small" style="background:var(--accent)" onclick="modifierProjet('${n}')">✏️</button>
+                    <button class="btn-small" style="background:var(--danger)" onclick="supprimerProjet('${n}')">🗑️</button>
+                    <button class="btn-small" style="background:var(--transfer)" onclick="retirerDuProjet('${n}')">💸</button>
                 </div>
             </div>`;
             selProj.innerHTML += `<option value="${n}">${n}</option>`;
@@ -241,6 +258,7 @@
         document.getElementById('history-list').innerHTML = histHtml;
     }
 
+    // Fonctions de gestion
     function ajouterRevenu() {
         const n = document.getElementById('inc-name'), a = document.getElementById('inc-amount'), v = parseFloat(a.value);
         if(v > 0) { data.solde += v; data.historique.push({date:getShortDate(new Date()), txt:`Entrée: ${n.value||'Revenu'}`, amt:v, color:'var(--success)', type:'revenu'}); n.value=""; a.value=""; save(); }
@@ -257,7 +275,7 @@
         const nI = document.getElementById('target-name'), aI = document.getElementById('target-amount'), n = nI.value.trim(), v = parseFloat(aI.value);
         if(n && v > 0 && v <= data.solde) {
             if(n.includes("Coffre")) { data.aPlacer = (data.aPlacer || 0) + v; data.historique.push({date:getShortDate(new Date()), txt:`Vers Coffre-fort`, amt:-v, color: 'var(--saving)', type:'vers_coffre'}); }
-            else { if(!data.categories[n]) data.categories[n]={assigne:0, reste:0}; data.categories[n].assigne += v; data.categories[n].reste += v; data.historique.push({date:getShortDate(new Date()), txt:`Vers ${n}`, amt:-v, color:'var(--accent)', type:'assignation', cat:n}); }
+            else { if(!data.categories[n]) data.categories[n]={assigne:0}; data.categories[n].assigne += v; data.historique.push({date:getShortDate(new Date()), txt:`Vers ${n}`, amt:-v, color:'var(--accent)', type:'assignation', cat:n}); }
             data.solde -= v; nI.value=""; aI.value=""; save();
         }
     }
@@ -265,92 +283,61 @@
     function depenserArgent() {
         const c = document.getElementById('select-cat').value, dI = document.getElementById('spend-desc'), aI = document.getElementById('spend-amount'), dt = document.getElementById('spend-date').value;
         const a = parseFloat(aI.value);
-        if(c && a > 0) { data.categories[c].reste -= a; data.historique.push({date:getShortDate(new Date(dt)), txt:`[${c}] ${dI.value}`, amt:-a, color:'var(--danger)', type:'depense', cat:c}); dI.value = ""; aI.value = ""; save(); }
+        if(c && a > 0) { data.historique.push({date:getShortDate(new Date(dt)), txt:`[${c}] ${dI.value}`, amt:-a, color:'var(--danger)', type:'depense', cat:c}); dI.value = ""; aI.value = ""; save(); }
     }
 
     function nouveauMois() {
-        let dep = data.historique.filter(h => h.type === 'depense').reduce((sum, h) => sum + Math.abs(h.amt), 0);
-        if(confirm(`Bilan : ${dep.toFixed(2)}€ dépensés. Confirmer le nouveau mois ? Le solde 'À assigner' sera vidé.`)) {
+        if(confirm(`Nouveau mois ? Le solde 'À assigner' sera vidé. Les enveloppes seront réinitialisées avec les restes actuels.`)) {
             data.solde = 0;
-            Object.keys(data.categories).forEach(n => data.categories[n].assigne = data.categories[n].reste);
+            Object.keys(data.categories).forEach(n => {
+                const totalFixesCat = data.chargesFixes.filter(f => f.cat === n).reduce((sum, f) => sum + f.amount, 0);
+                const depensesVariables = data.historique.filter(h => h.type === 'depense' && h.cat === n).reduce((sum, h) => sum + Math.abs(h.amt), 0);
+                data.categories[n].assigne = data.categories[n].assigne - totalFixesCat - depensesVariables;
+            });
             data.historique = []; save();
         }
     }
 
-    function ajouterPlanification() {
-        const c = document.getElementById('plan-cat').value, d = document.getElementById('plan-date-input').value, desc = document.getElementById('plan-desc').value, a = parseFloat(document.getElementById('plan-amount').value);
-        if(c && d && a > 0) { data.planification.push({cat:c, date:d, desc:desc, amount:a}); document.getElementById('plan-desc').value=""; document.getElementById('plan-amount').value=""; save(); }
-    }
-
-    function supprimerPlan(i) { data.planification.splice(i,1); save(); }
-
-    function placerDansProjet() {
-        const p = document.getElementById('select-project-target').value, aI = document.getElementById('project-amount'), v = parseFloat(aI.value);
-        if(p && v > 0 && v <= data.aPlacer) { data.projetsEpargne[p].cumul += v; data.soldeEpargne += v; data.aPlacer -= v; data.historique.push({date:getShortDate(new Date()), txt:`Placement: ${p}`, amt:v, color:'var(--success)', type:'placement_interne'}); aI.value=""; save(); }
-    }
-
-    function retirerDuProjet(n) {
-        const amt = parseFloat(prompt(`Montant à sortir de "${n}" pour le remettre dans "À placer" ?`));
-        if(!isNaN(amt) && amt > 0 && amt <= data.projetsEpargne[n].cumul) { data.projetsEpargne[n].cumul -= amt; data.soldeEpargne -= amt; data.aPlacer += amt; save(); }
-    }
-
-    function libererVersBudget() {
-        const amt = parseFloat(prompt(`Montant à renvoyer vers "À assigner" ? (Max: ${data.aPlacer.toFixed(2)}€)`));
-        if(!isNaN(amt) && amt > 0 && amt <= data.aPlacer) {
-            data.aPlacer -= amt;
-            data.solde += amt;
-            data.historique.push({date:getShortDate(new Date()), txt:`Retour du coffre`, amt:amt, color:'var(--success)', type:'revenu'});
-            save();
-        }
-    }
-
-    function modifierProjet(oldName) {
-        const newName = prompt("Nouveau nom du projet ?", oldName);
-        const newGoal = parseFloat(prompt("Nouvel objectif (€) ?", data.projetsEpargne[oldName].goal));
-        if(newName && !isNaN(newGoal)) {
-            const projectData = data.projetsEpargne[oldName];
-            delete data.projetsEpargne[oldName];
-            data.projetsEpargne[newName] = projectData;
-            data.projetsEpargne[newName].goal = newGoal;
-            save();
-        }
-    }
-
-    function supprimerProjet(n) {
-        if(confirm(`Supprimer le projet "${n}" ? L'argent accumulé (${data.projetsEpargne[n].cumul.toFixed(2)}€) sera reversé dans "À placer".`)) {
-            data.aPlacer += data.projetsEpargne[n].cumul;
-            data.soldeEpargne -= data.projetsEpargne[n].cumul;
-            delete data.projetsEpargne[n];
-            save();
-        }
-    }
-
-    function creerProjet() {
-        const nI = document.getElementById('proj-name'), gI = document.getElementById('proj-goal'), n = nI.value, g = parseFloat(gI.value);
-        if(n && !isNaN(g)) { 
-            data.projetsEpargne[n] = {cumul:0, goal:g}; 
-            nI.value = ""; gI.value = ""; 
-            save(); 
-        }
-    }
-
-    function annulerTransaction(idx) {
-        const h = data.historique[idx], amt = Math.abs(h.amt);
-        if(h.type === 'revenu') data.solde -= amt;
-        else if(h.type === 'assignation') { data.categories[h.cat].reste -= amt; data.categories[h.cat].assigne -= amt; data.solde += amt; }
-        else if(h.type === 'vers_coffre') { data.aPlacer -= amt; data.solde += amt; }
-        else if(h.type === 'depense') { data.categories[h.cat].reste += amt; }
-        data.historique.splice(idx, 1); save();
-    }
-
-    function getShortDate(d) { return d.toLocaleDateString('fr-FR', {day:'numeric', month:'short'}); }
-
     function updateChart() {
         const canvas = document.getElementById('expenseChart'); if (!canvas) return;
-        const labels = Object.keys(data.categories); const values = labels.map(n => data.categories[n].reste);
+        const today = new Date().getDate();
+        
+        // Calcul des dépenses réelles par catégorie
+        const depensesParCat = {};
+        Object.keys(data.categories).forEach(cat => {
+            // 1. Dépenses variables
+            const variables = data.historique.filter(h => h.type === 'depense' && h.cat === cat).reduce((sum, h) => sum + Math.abs(h.amt), 0);
+            // 2. Charges fixes déjà passées
+            const fixesPayees = data.chargesFixes.filter(f => f.cat === cat && f.day <= today).reduce((sum, f) => sum + f.amount, 0);
+            
+            const total = variables + fixesPayees;
+            if(total > 0) depensesParCat[cat] = total;
+        });
+
+        const labels = Object.keys(depensesParCat);
+        const values = Object.values(depensesParCat);
+
         if(myChart) myChart.destroy();
-        myChart = new Chart(canvas.getContext('2d'), { type: 'doughnut', data: { labels: labels, datasets: [{ data: values, backgroundColor: palette }] }, options: { plugins: { legend: { display: false } } } });
+        if(labels.length === 0) return;
+
+        myChart = new Chart(canvas.getContext('2d'), { 
+            type: 'doughnut', 
+            data: { labels: labels, datasets: [{ data: values, backgroundColor: palette }] }, 
+            options: { plugins: { legend: { position: 'bottom', labels: { color: '#888', font: { size: 10 } } } } } 
+        });
     }
+
+    // Autres fonctions (Planification, Coffre) identiques
+    function ajouterPlanification() { const c = document.getElementById('plan-cat').value, d = document.getElementById('plan-date-input').value, desc = document.getElementById('plan-desc').value, a = parseFloat(document.getElementById('plan-amount').value); if(c && d && a > 0) { data.planification.push({cat:c, date:d, desc:desc, amount:a}); document.getElementById('plan-desc').value=""; document.getElementById('plan-amount').value=""; save(); } }
+    function supprimerPlan(i) { data.planification.splice(i,1); save(); }
+    function placerDansProjet() { const p = document.getElementById('select-project-target').value, aI = document.getElementById('project-amount'), v = parseFloat(aI.value); if(p && v > 0 && v <= data.aPlacer) { data.projetsEpargne[p].cumul += v; data.soldeEpargne += v; data.aPlacer -= v; save(); } }
+    function retirerDuProjet(n) { const amt = parseFloat(prompt(`Montant à sortir de "${n}" ?`)); if(!isNaN(amt) && amt > 0 && amt <= data.projetsEpargne[n].cumul) { data.projetsEpargne[n].cumul -= amt; data.soldeEpargne -= amt; data.aPlacer += amt; save(); } }
+    function libererVersBudget() { const amt = parseFloat(prompt(`Montant à renvoyer vers "À assigner" ?`)); if(!isNaN(amt) && amt > 0 && amt <= data.aPlacer) { data.aPlacer -= amt; data.solde += amt; save(); } }
+    function modifierProjet(oldName) { const newName = prompt("Nom ?", oldName); const newGoal = parseFloat(prompt("Objectif ?", data.projetsEpargne[oldName].goal)); if(newName && !isNaN(newGoal)) { const p = data.projetsEpargne[oldName]; delete data.projetsEpargne[oldName]; data.projetsEpargne[newName] = p; data.projetsEpargne[newName].goal = newGoal; save(); } }
+    function supprimerProjet(n) { if(confirm("Supprimer ?")) { data.aPlacer += data.projetsEpargne[n].cumul; data.soldeEpargne -= data.projetsEpargne[n].cumul; delete data.projetsEpargne[n]; save(); } }
+    function creerProjet() { const nI = document.getElementById('proj-name'), gI = document.getElementById('proj-goal'), n = nI.value, g = parseFloat(gI.value); if(n && !isNaN(g)) { data.projetsEpargne[n] = {cumul:0, goal:g}; nI.value = ""; gI.value = ""; save(); } }
+    function annulerTransaction(idx) { const h = data.historique[idx], amt = Math.abs(h.amt); if(h.type === 'revenu') data.solde -= amt; else if(h.type === 'assignation') { data.categories[h.cat].assigne -= amt; data.solde += amt; } else if(h.type === 'vers_coffre') { data.aPlacer -= amt; data.solde += amt; } data.historique.splice(idx, 1); save(); }
+    function getShortDate(d) { return d.toLocaleDateString('fr-FR', {day:'numeric', month:'short'}); }
 
     document.getElementById('spend-date').value = new Date().toISOString().split('T')[0];
     render();
